@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Calendar, 
-  Kanban, 
-  Bell, 
-  Search, 
-  Menu, 
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  Kanban,
+  Bell,
+  Search,
+  Menu,
   LogOut
 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
@@ -18,9 +17,11 @@ import PatientListView from './components/PatientListView';
 import PatientDetailView from './components/PatientDetailView';
 import AgendaView from './components/AgendaView';
 import { CommandPalette } from './components/CommandPalette';
+import LoginPage from './components/LoginPage';
+import { AuthUser, onAuthStateChange, logout } from './services/auth';
 import { mockAppointments } from './mockData';
 
-const AxosLogo: React.FC<{ collapsed?: boolean }> = ({ collapsed }) => (
+const SolaraLogo: React.FC<{ collapsed?: boolean }> = ({ collapsed }) => (
   <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-4'} transition-all duration-300 font-inter`}>
     <div className="relative w-12 h-10 shrink-0">
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full filter drop-shadow-[0_0_8px_rgba(0,163,255,0.4)]" aria-hidden="true">
@@ -42,31 +43,51 @@ const AxosLogo: React.FC<{ collapsed?: boolean }> = ({ collapsed }) => (
     </div>
     {!collapsed && (
       <div className="flex font-semibold tracking-tight text-2xl leading-none">
-        <span className="text-[#F1F5F9]">AXOS</span>
-        <span className="text-[#00A3FF] ml-1.5">HUB</span>
+        <span className="text-[#F1F5F9]">SOLARA</span>
+        <span className="text-[#00A3FF] ml-1.5">CONNECT</span>
       </div>
     )}
   </div>
 );
 
 const App: React.FC = () => {
-  const { 
-    activeTab, setActiveTab, 
-    isSidebarOpen, setSidebarOpen, 
-    patients, 
+  const {
+    activeTab, setActiveTab,
+    isSidebarOpen, setSidebarOpen,
+    patients,
     selectedPatientId, setSelectedPatientId,
-    updatePatientStatus, updatePatient
+    updatePatientStatus, updatePatient,
+    isLoading, loadCustomers
   } = useAxosStore();
+
+  const [authenticated, setAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
+  // Auth listener
+  useEffect(() => {
+    const { data } = onAuthStateChange((user) => {
+      setAuthenticated(!!user);
+      setCurrentUser(user);
+      if (user) loadCustomers();
+    });
+
+    // Cleanup
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Command palette keyboard shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -78,14 +99,20 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const handleLogout = async () => {
+    await logout();
+    setAuthenticated(false);
+    setCurrentUser(null);
+  };
+
   const selectedPatient = patients.find(p => p.id === selectedPatientId);
 
   const renderView = () => {
     if (selectedPatientId && selectedPatient) {
       return (
-        <PatientDetailView 
-          patient={selectedPatient} 
-          onBack={() => setSelectedPatientId(null)} 
+        <PatientDetailView
+          patient={selectedPatient}
+          onBack={() => setSelectedPatientId(null)}
           onUpdate={updatePatient}
         />
       );
@@ -94,33 +121,41 @@ const App: React.FC = () => {
       case 'dashboard': return <DashboardView patients={patients} onOpenPatient={setSelectedPatientId} />;
       case 'kanban': return <KanbanView patients={patients} onUpdateStatus={updatePatientStatus} onOpenPatient={setSelectedPatientId} />;
       case 'patients': return (
-        <PatientListView 
-          patients={patients.filter(p => p.name.toLowerCase().includes(debouncedQuery.toLowerCase()) || p.cpf.includes(debouncedQuery))} 
-          searchQuery={searchQuery} 
-          setSearchQuery={setSearchQuery} 
-          onOpenPatient={setSelectedPatientId} 
+        <PatientListView
+          patients={patients.filter(p => p.name.toLowerCase().includes(debouncedQuery.toLowerCase()) || p.cpf.includes(debouncedQuery))}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onOpenPatient={setSelectedPatientId}
         />
       );
       case 'agenda': return <AgendaView appointments={mockAppointments} />;
     }
   };
 
+  // Se nao autenticado, mostra pagina de login
+  if (!authenticated) {
+    return <LoginPage onLogin={(user) => {
+      setAuthenticated(true);
+      setCurrentUser(user);
+    }} />;
+  }
+
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-inter text-slate-900">
       <Toaster position="top-right" />
-      <CommandPalette 
-        isOpen={isCommandPaletteOpen} 
-        onClose={() => setIsCommandPaletteOpen(false)} 
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
         patients={patients}
         onSelectPatient={setSelectedPatientId}
       />
-      
-      <aside 
+
+      <aside
         className={`${isSidebarOpen ? 'w-72' : 'w-24'} premium-gradient text-white transition-all duration-500 flex flex-col z-50 border-r border-white/5`}
         aria-label="Menu principal"
       >
         <div className="p-8 h-28 flex items-center overflow-hidden">
-          <AxosLogo collapsed={!isSidebarOpen} />
+          <SolaraLogo collapsed={!isSidebarOpen} />
         </div>
         <nav className="flex-1 mt-6 px-5 space-y-3">
           {[
@@ -143,7 +178,8 @@ const App: React.FC = () => {
           ))}
         </nav>
         <div className="p-8 border-t border-white/5">
-          <button 
+          <button
+            onClick={handleLogout}
             className="w-full flex items-center gap-4 p-4 text-slate-500 hover:text-red-400 transition-all font-semibold uppercase text-xs tracking-widest"
             aria-label="Sair do sistema"
           >
@@ -156,14 +192,14 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col overflow-hidden bg-[#F8FAFC]">
         <header className="h-28 bg-white border-b border-slate-200 px-12 flex items-center justify-between shadow-sm z-40">
           <div className="flex items-center gap-8">
-            <button 
-              onClick={() => setSidebarOpen(!isSidebarOpen)} 
+            <button
+              onClick={() => setSidebarOpen(!isSidebarOpen)}
               aria-label="Recolher menu"
               className="p-3 hover:bg-slate-50 rounded-xl text-slate-400 border border-slate-200 transition-all hover:border-[#00A3FF]"
             >
               <Menu size={24} />
             </button>
-            <div 
+            <div
               onClick={() => setIsCommandPaletteOpen(true)}
               className="hidden lg:flex items-center bg-slate-50 px-6 py-3.5 rounded-[22px] w-[500px] gap-4 border border-slate-200 hover:border-[#00A3FF] cursor-text transition-all group"
             >
@@ -179,17 +215,24 @@ const App: React.FC = () => {
             <div className="h-10 w-px bg-slate-200"></div>
             <div className="flex items-center gap-4 cursor-pointer group">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-slate-900 group-hover:text-[#00A3FF] transition-colors">Administração</p>
-                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Gestão Central Axos</p>
+                <p className="text-sm font-semibold text-slate-900 group-hover:text-[#00A3FF] transition-colors">{currentUser?.nome || 'Administração'}</p>
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Gestão Central Solara</p>
               </div>
               <div className="w-12 h-12 bg-[#2D3436] rounded-[18px] flex items-center justify-center text-white font-bold shadow-lg border-2 border-white">
-                AH
+                {currentUser?.nome?.charAt(0)?.toUpperCase() || 'SC'}
               </div>
             </div>
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
-          {renderView()}
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="w-12 h-12 border-3 border-[#00A3FF]/20 border-t-[#00A3FF] rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-slate-400 text-sm font-medium">Carregando dados...</p>
+              </div>
+            </div>
+          ) : renderView()}
         </div>
       </main>
     </div>
