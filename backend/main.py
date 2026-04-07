@@ -11,12 +11,13 @@ import re
 import os
 from datetime import datetime, timedelta
 from enum import Enum
-from fastapi import HTTPException
 
-import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, BackgroundTasks
+load_dotenv()
+
+from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 from supabase import create_client, Client
 
 from lgpd import (
@@ -27,8 +28,6 @@ from lgpd import (
     request_opt_out,
     purge_old_data,
 )
-
-load_dotenv()
 
 # ============================================
 # CONFIG
